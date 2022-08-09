@@ -3,7 +3,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{self, TokenAccount, Token, Mint};
 use mpl_token_metadata::state::{TokenMetadataAccount, Metadata};
 use anchor_lang::system_program;
-use anchor_spl::associated_token::{get_associated_token_address};
+use anchor_spl::associated_token::get_associated_token_address;
 
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
@@ -19,8 +19,42 @@ pub const METAPLEX_PROGRAM_ID: &'static str = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6
 pub const LAMPORTS_PER_DROPLET: u64 = 100000000;
 pub const DROPLETS_PER_NFT: u16 = 100;
 pub const LAMPORTS_PER_SOL: u64 = 1000000000;
+pub const PROTOCOL_DROPLET_FEE: u64 = 1;
+pub const PROTOCOL_SOL_FEE: f64 = 0.5;
 
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]
+pub enum CreatorsInfo {
+    Creator1 {
+        creator_one: Pubkey,
+    },
+    Creator2 {
+        creator_one: Pubkey,
+        creator_two: Pubkey,
+    },
+    Creator3 {
+        creator_one: Pubkey,
+        creator_two: Pubkey,
+        creator_three: Pubkey,
+    },
+    Creator4 {
+        creator_one: Pubkey,
+        creator_two: Pubkey,
+        creator_three: Pubkey,
+        creator_four: Pubkey,
+    },
+    Creator5 {
+        creator_one: Pubkey,
+        creator_two: Pubkey,
+        creator_three: Pubkey,
+        creator_four: Pubkey,
+        creator_five: Pubkey,
+    }
+}
 
+impl CreatorsInfo {
+    // 1 + largest variant: 5 Pubkeys
+    pub const LEN: usize = 1 + (5 * 32);
+}
 
 // Verify in the NFT belongs to the collection
 pub fn verify_collection(
@@ -41,8 +75,8 @@ pub fn verify_collection(
 
 // Verify Creator is Valid(i.e creators exists in metadata)
 pub fn verify_creator(
-    metadata: &AccountInfo,
-    creator_account: &AccountInfo,
+    metadata: &AccountInfo, // Should be TokenAccount not Metadata Account
+    creator_account: &Pubkey,
 ) -> bool
 {
     let metadata: Metadata = Metadata::from_account_info(metadata).unwrap();
@@ -64,28 +98,118 @@ pub fn verify_creator(
     is_creator_verified
 }
 
-// pub fn pay_fee_droplet<'info>(
-//     amount: u64, 
-//     buyer_droplet_token_account: &AccountInfo,
-//     creator_droplet_token_account: &AccountInfo, 
-//     buyer_signer: &AccountInfo,
-//     token_program: &AccountInfo
-// ) -> Result<()>
-// {
+// Verifies a batch of creators match the expected creators
+pub fn verify_creators(
+    metadata: &AccountInfo,
+    creators: &CreatorsInfo,
+) -> bool
+{
 
-//     let transfer_droplet_ctx = CpiContext::new(
-//         token_program.to_account_info(),
-//         token::Transfer{
-//             from: buyer_droplet_token_account.to_account_info().clone(),
-//             to: creator_droplet_token_account.to_account_info(),
-//             authority: buyer_signer.to_account_info(),
-//         }
-//     );
-//     token::transfer(transfer_droplet_ctx, amount)?;
+    match creators
+    {
+        CreatorsInfo::Creator1 { 
+            ref creator_one 
+        } => {
+            verify_creator(metadata, &creator_one)
+        },
+        CreatorsInfo::Creator2 { 
+            ref creator_one, 
+            ref creator_two 
+        } => {
+            verify_creator(metadata, creator_one)
+            &&
+            verify_creator(metadata, creator_two)
+        },
+        CreatorsInfo::Creator3 { 
+            ref creator_one, 
+            ref creator_two, 
+            ref creator_three 
+        } => {
+            verify_creator(metadata, creator_one)
+            &&
+            verify_creator(metadata, creator_two)
+            &&
+            verify_creator(metadata, creator_three)
+        },
+        CreatorsInfo::Creator4 { 
+            ref creator_one, 
+            ref creator_two, 
+            ref creator_three, 
+            ref creator_four 
+        } => {
+            verify_creator(metadata, creator_one)
+            &&
+            verify_creator(metadata, creator_two)
+            &&
+            verify_creator(metadata, creator_three)
+            && 
+            verify_creator(metadata, creator_four)
+        },
+        CreatorsInfo::Creator5 { 
+            ref creator_one, 
+            ref creator_two, 
+            ref creator_three, 
+            ref creator_four, 
+            ref creator_five 
+        } => {
+            verify_creator(metadata, creator_one)
+            &&
+            verify_creator(metadata, creator_two)
+            &&
+            verify_creator(metadata, creator_three)
+            && 
+            verify_creator(metadata, creator_four)
+            &&
+            verify_creator(metadata, creator_five)
+        }
+        
+    }
 
-//     Ok(())
-// }
+}
 
+
+pub fn pay_droplet_fee<'a>(
+    amount: u64,
+    from_account: &AccountInfo<'a>,
+    to_account: &AccountInfo<'a>,
+    authority: &AccountInfo<'a>,
+    token_program: &AccountInfo<'a>,
+) -> Result<()>
+{
+    let transfer_droplet_ctx = CpiContext::new(
+        token_program.to_account_info(),
+        token::Transfer{
+            from: from_account.to_account_info(),
+            to: to_account.to_account_info(),
+            authority: authority.to_account_info(),
+        }
+    );
+
+    token::transfer(transfer_droplet_ctx, amount)?;
+
+    Ok(())
+}
+
+pub fn pay_sol_fee<'a>(
+    creator_sol_amount: u64,
+    from_account: &AccountInfo<'a>,
+    to_account: &AccountInfo<'a>,
+    system_program: &AccountInfo<'a>,
+) -> Result<()>
+{
+    let transfer_sol_ctx =
+        CpiContext::new(
+            system_program.to_account_info(),
+            system_program::Transfer {
+                from: from_account.to_account_info(),
+                to: to_account.to_account_info(),
+            },
+        );
+
+    system_program::transfer(transfer_sol_ctx, creator_sol_amount)?;
+    
+    Ok(())
+}
 
 #[program]
 pub mod marketplace_contract {
@@ -160,92 +284,13 @@ pub mod marketplace_contract {
         Ok(())
     }
 
-    pub fn buy_nft(ctx: Context<BuyNFT>, sol_amount: u8) -> Result<()>
+    pub fn buy_nft(
+        ctx: Context<BuyNFT>, 
+        creators_info: CreatorsInfo,
+        sol_amount: u64
+    ) -> Result<()>
     {
         let metadata: Metadata = Metadata::from_account_info(&ctx.accounts.nft_metadata).unwrap();
-        // Fee for Creators
-        // creator_fees is a percentage
-        let creator_droplet_fees = metadata.data.seller_fee_basis_points
-                                .checked_div(100)
-                                .unwrap();
-        
-        // Pay Creators Fee
-        if metadata.data.creators.is_some()
-        {
-            if let Some(creators) = metadata.data.creators{
-                 // Pay Royalties (TODO - Divide by 100 if above 100)           
-                //let mut creator_share;
-                let mut index = 0;
-                for creator in creators
-                {
-                    let creator_share: u64 = creator
-                    .share
-                    .checked_div(100)
-                    .unwrap() as u64;
-
-                    let creator_amount = creator_share
-                    .checked_mul(creator_droplet_fees as u64)
-                    .unwrap()
-                    .checked_mul(LAMPORTS_PER_DROPLET as u64)
-                    .unwrap()
-                    .checked_mul(DROPLETS_PER_NFT as u64)
-                    .unwrap() as u64;
-                    
-                    let transfer_droplet_ctx = CpiContext::new(
-                        ctx.accounts.token_program.to_account_info(),
-                        token::Transfer{
-                            from: ctx.accounts.buyer_droplet.to_account_info(),
-                            to: ctx.accounts.creator1_droplet.to_account_info(),
-                            authority: ctx.accounts.buyer.to_account_info(),
-                        }
-                    );
-                    token::transfer(transfer_droplet_ctx, creator_amount)?;
-                
-                    // pay_fee_droplet(
-                    //     creator_droplet_fee
-                    //            .checked_mul(DROPLETS_PER_NFT)
-                    //            .unwrap()
-                    //            .checked_mul(LAMPORTS_PER_DROPLET)
-                    //            .unwrap() as u64, 
-                    //     AccountMeta::new(buyer_droplet_token_account, false),
-                    //     &creator_droplet_token_account,
-                    //     &ctx.accounts.buyer.key(),
-                    //     &ctx.accounts.token_program.to_account_info(),
-                    // );
-
-                    // Send SOL to Creators if Buyer wants to tip creators
-                    if ctx.accounts.nft_info.tip_creators_sol_fee != 0
-                    {
-                        let creator_sol_fees = ctx.accounts.nft_info.tip_creators_sol_fee
-                            .checked_div(100)
-                            .unwrap();
-
-                        let creator_sol_amount: u64 = creator_share
-                        .checked_mul(creator_sol_fees as u64)
-                        .unwrap()
-                        .checked_mul(LAMPORTS_PER_SOL as u64)
-                        .unwrap()
-                        .checked_mul(sol_amount as u64)
-                        .unwrap() as u64;
-                        
-                        system_program::transfer(
-                            CpiContext::new(
-                                ctx.accounts.system_program.to_account_info(),
-                                system_program::Transfer {
-                                    from: ctx.accounts.buyer.to_account_info(),
-                                    to: ctx.accounts.creator1.to_account_info(),
-                                },
-                            ),
-                            creator_sol_amount,
-                        )?;
-                    }
-                    index = index + 1;
-                }
-            
-            };
-        }
-        // Fee for protocol
-
         // check if nft info has collection and matches with metadata
 
         let is_collection_present = metadata.collection.is_some();
@@ -255,7 +300,7 @@ pub mod marketplace_contract {
         if let Some(collection) = metadata.collection{
             ctx.accounts.nft_info.collection_mint == collection.key
         }else{
-            false // throw
+            false // throw TODO
         };
 
         let metaplex_pubkey = METAPLEX_PROGRAM_ID
@@ -274,8 +319,183 @@ pub mod marketplace_contract {
             return Err(FasterError::NoMatchMetadata.into());
         }
 
+        
+        require!(
+            verify_creators(&ctx.accounts.nft_metadata, &creators_info),
+            FasterError::CreatorsNotVerified,
+        );
+        
+        // Fee for Creators
+        // creator_fees is a percentage
+        let creator_droplet_fees = metadata.data.seller_fee_basis_points
+                                .checked_div(100)
+                                .unwrap();
+        
+        // Pay Creators Fee
+        if metadata.data.creators.is_some()
+        {
+            if let Some(creators) = metadata.data.creators{
+                 // Pay Royalties (TODO - Divide by 100 if above 100)           
+                let mut index = 0;
+                for creator in creators
+                {
+                    let creator_share: u64 = creator
+                    .share
+                    .checked_div(100)
+                    .unwrap() as u64;
 
-        // Transfer NFT to Buyer and Close Seller Token Amount
+                    let creator_amount = creator_share
+                    .checked_mul(creator_droplet_fees as u64)
+                    .unwrap()
+                    .checked_mul(LAMPORTS_PER_DROPLET as u64)
+                    .unwrap()
+                    .checked_mul(DROPLETS_PER_NFT as u64)
+                    .unwrap() as u64;
+                    
+                    if index == 0 {
+                        pay_droplet_fee(
+                            creator_amount,
+                            &ctx.accounts.buyer_droplet.to_account_info(),
+                            &ctx.accounts.creator1_droplet.to_account_info(),
+                            &ctx.accounts.buyer.to_account_info(),
+                            &ctx.accounts.token_program.to_account_info(),
+                        )?;
+                    }else if index == 1 {
+                        pay_droplet_fee(
+                            creator_amount,
+                            &ctx.accounts.buyer_droplet.to_account_info(),
+                            &ctx.accounts.creator2_droplet.to_account_info(),
+                            &ctx.accounts.buyer.to_account_info(),
+                            &ctx.accounts.token_program.to_account_info(),
+                        )?;
+                    }else if index == 2 {
+                        pay_droplet_fee(
+                            creator_amount,
+                            &ctx.accounts.buyer_droplet.to_account_info(),
+                            &ctx.accounts.creator3_droplet.to_account_info(),
+                            &ctx.accounts.buyer.to_account_info(),
+                            &ctx.accounts.token_program.to_account_info(),
+                        )?;
+                    }else if index == 3 {
+                        pay_droplet_fee(
+                            creator_amount,
+                            &ctx.accounts.buyer_droplet.to_account_info(),
+                            &ctx.accounts.creator4_droplet.to_account_info(),
+                            &ctx.accounts.buyer.to_account_info(),
+                            &ctx.accounts.token_program.to_account_info(),
+                        )?;
+                    }else {
+                        pay_droplet_fee(
+                            creator_amount,
+                            &ctx.accounts.buyer_droplet.to_account_info(),
+                            &ctx.accounts.creator5_droplet.to_account_info(),
+                            &ctx.accounts.buyer.to_account_info(),
+                            &ctx.accounts.token_program.to_account_info(),
+                        )?;
+                    }
+
+
+                    // Send SOL to Creators if Buyer wants to tip creators
+                    if ctx.accounts.nft_info.tip_creators_sol_fee != 0
+                    {
+                        let creator_sol_fees = ctx.accounts.nft_info.tip_creators_sol_fee
+                            .checked_div(100)
+                            .unwrap();
+
+                        let creator_sol_amount: u64 = creator_share
+                        .checked_div(100)
+                        .unwrap()
+                        .checked_mul(creator_sol_fees as u64)
+                        .unwrap()
+                        .checked_mul(LAMPORTS_PER_SOL as u64)
+                        .unwrap()
+                        .checked_mul(sol_amount as u64)
+                        .unwrap() as u64;
+                        
+                        if index == 0 {
+                            pay_sol_fee(
+                                creator_sol_amount, 
+                                &ctx.accounts.buyer.to_account_info(), 
+                                &ctx.accounts.creator1.to_account_info(), 
+                                &ctx.accounts.system_program.to_account_info()
+                            )?
+                        }else if index == 1 {
+                            pay_sol_fee(
+                                creator_sol_amount, 
+                                &ctx.accounts.buyer.to_account_info(), 
+                                &ctx.accounts.creator2.to_account_info(), 
+                                &ctx.accounts.system_program.to_account_info()
+                            )?
+                        }else if index == 2 {
+                            pay_sol_fee(
+                                creator_sol_amount, 
+                                &ctx.accounts.buyer.to_account_info(), 
+                                &ctx.accounts.creator3.to_account_info(), 
+                                &ctx.accounts.system_program.to_account_info()
+                            )?
+                        }else if index == 3 {
+                            pay_sol_fee(
+                                creator_sol_amount, 
+                                &ctx.accounts.buyer.to_account_info(), 
+                                &ctx.accounts.creator4.to_account_info(), 
+                                &ctx.accounts.system_program.to_account_info()
+                            )?
+                        }else {
+                            pay_sol_fee(
+                                creator_sol_amount, 
+                                &ctx.accounts.buyer.to_account_info(), 
+                                &ctx.accounts.creator5.to_account_info(), 
+                                &ctx.accounts.system_program.to_account_info()
+                            )?
+
+                        }
+
+                    }
+
+                    index = index + 1;
+                }
+            
+            };
+        }
+
+        // Fee for protocol
+        let protocol_droplet_fee = PROTOCOL_DROPLET_FEE
+        .checked_div(100)
+        .unwrap();
+        
+        let protocol_droplet_amount = protocol_droplet_fee                    
+        .checked_mul(LAMPORTS_PER_DROPLET as u64)
+        .unwrap()
+        .checked_mul(DROPLETS_PER_NFT as u64)
+        .unwrap() as u64;
+        
+        pay_droplet_fee(
+            protocol_droplet_amount, 
+            &ctx.accounts.buyer_droplet.to_account_info(), 
+            &ctx.accounts.faster_protocol_droplet.to_account_info(), 
+            &ctx.accounts.buyer.to_account_info(), 
+            &ctx.accounts.token_program.to_account_info()
+        )?;
+
+        let protocol_sol_fee = (PROTOCOL_SOL_FEE / 100 as f64) as u64;
+        // .checked_div(100 as f64)
+        // .unwrap() as u64;
+
+        let protocol_sol_amount = protocol_sol_fee
+        .checked_mul(LAMPORTS_PER_SOL)
+        .unwrap()
+        .checked_mul(sol_amount)
+        .unwrap();
+
+        pay_sol_fee(
+            protocol_sol_amount, 
+            &ctx.accounts.buyer.to_account_info(), 
+            &ctx.accounts.faster_protocol.to_account_info(), 
+            &ctx.accounts.system_program.to_account_info(),
+        )?;
+
+
+        // Transfer NFT to Buyer, pay Remaining SOL to seller and Close Seller Token Amount
 
         Ok(())
     }
@@ -392,6 +612,13 @@ pub struct BuyNFT<'info>
     )]
     pub buyer_droplet: Account<'info, TokenAccount>,
 
+    /// CHECK: TODO come and check validation later
+    #[account(
+        mut,
+        constraint = seller.key() == seller_droplet.owner
+    )]
+    pub seller: UncheckedAccount<'info>,
+
     #[account(
         mut,
         constraint = seller_droplet.key() == nft_info.droplet_token_account,
@@ -437,7 +664,7 @@ pub struct BuyNFT<'info>
     /// CHECK: 
     #[account(
         mut, 
-        constraint = verify_creator(&nft_metadata, &creator1) @ FasterError::InValidCreator,
+        constraint = verify_creator(&nft_metadata, &creator1.key()) @ FasterError::InValidCreator,
     )]
     pub creator1: UncheckedAccount<'info>,
 
@@ -453,7 +680,7 @@ pub struct BuyNFT<'info>
     /// CHECK: 
     #[account(
         mut, 
-        constraint = verify_creator(&nft_metadata, &creator2) @ FasterError::InValidCreator,
+        constraint = verify_creator(&nft_metadata, &creator2.key()) @ FasterError::InValidCreator,
     )]
     pub creator2: UncheckedAccount<'info>,
 
@@ -469,7 +696,7 @@ pub struct BuyNFT<'info>
     /// CHECK: 
     #[account(
         mut, 
-        constraint = verify_creator(&nft_metadata, &creator3) @ FasterError::InValidCreator,
+        constraint = verify_creator(&nft_metadata, &creator3.key()) @ FasterError::InValidCreator,
     )]
     pub creator3: UncheckedAccount<'info>,
 
@@ -485,7 +712,7 @@ pub struct BuyNFT<'info>
     /// CHECK: 
     #[account(
         mut, 
-        constraint = verify_creator(&nft_metadata, &creator4) @ FasterError::InValidCreator,
+        constraint = verify_creator(&nft_metadata, &creator4.key()) @ FasterError::InValidCreator,
     )]
     pub creator4: UncheckedAccount<'info>,
 
@@ -501,9 +728,25 @@ pub struct BuyNFT<'info>
     /// CHECK: 
     #[account(
         mut, 
-        constraint = verify_creator(&nft_metadata, &creator5) @ FasterError::InValidCreator,
+        constraint = verify_creator(&nft_metadata, &creator5.key()) @ FasterError::InValidCreator,
     )]
     pub creator5: UncheckedAccount<'info>,
+
+    // protocols
+    #[account(executable)]
+    pub solvent_program: UncheckedAccount<'info>, 
+    /// CHECK: TODO, Add Better Validation to not spoof Protocol account
+    #[account(
+        mut,
+    )]
+    pub faster_protocol: UncheckedAccount<'info>,
+
+    #[account(
+        mut,
+        constraint = faster_protocol_droplet.owner == faster_protocol.key()
+    )]
+    pub faster_protocol_droplet: Account<'info, TokenAccount>,
+
 
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
@@ -558,12 +801,15 @@ pub struct ListNFT<'info>
     )]
     pub program_nft_authority: UncheckedAccount<'info>,
 
-    #[account(executable)]
-    pub solvent_program: UncheckedAccount<'info>, 
 
 
     /// CHECK: Safe because only reading is done
     pub nft_metadata: UncheckedAccount<'info>,
+
+
+    // protocols
+    #[account(executable)]
+    pub solvent_program: UncheckedAccount<'info>, 
 
     // sysvars
     pub token_program: Program<'info, Token>,
@@ -603,6 +849,9 @@ pub enum FasterError
 
     #[msg("Droplet mint passed does not match")]
     DropletMintMismatch,
+
+    #[msg("Creator(s) are not verified, either incomplete or invalid")]
+    CreatorsNotVerified,
 }
 // TODO 
 // SOLVENT PROGRAM should be static str
