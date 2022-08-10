@@ -21,6 +21,7 @@ pub const DROPLETS_PER_NFT: u16 = 100;
 pub const LAMPORTS_PER_SOL: u64 = 1000000000;
 pub const PROTOCOL_DROPLET_FEE: u64 = 1;
 pub const PROTOCOL_SOL_FEE: f64 = 0.5;
+pub const HUNDRED_PERCENT: u16 = 100;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]
 pub enum CreatorsInfo {
@@ -214,6 +215,8 @@ pub fn pay_sol_fee<'a>(
 #[program]
 pub mod marketplace_contract {
 
+    use std::ops::Mul;
+
     use super::*;
 
     pub fn create_nft_list(
@@ -328,7 +331,7 @@ pub mod marketplace_contract {
         // Fee for Creators
         // creator_fees is a percentage
         let creator_droplet_fees = metadata.data.seller_fee_basis_points
-                                .checked_div(100)
+                                .checked_div(HUNDRED_PERCENT)
                                 .unwrap();
         
         // Pay Creators Fee
@@ -341,7 +344,7 @@ pub mod marketplace_contract {
                 {
                     let creator_share: u64 = creator
                     .share
-                    .checked_div(100)
+                    .checked_div(HUNDRED_PERCENT as u8)
                     .unwrap() as u64;
 
                     let creator_amount = creator_share
@@ -399,11 +402,11 @@ pub mod marketplace_contract {
                     if ctx.accounts.nft_info.tip_creators_sol_fee != 0
                     {
                         let creator_sol_fees = ctx.accounts.nft_info.tip_creators_sol_fee
-                            .checked_div(100)
+                            .checked_div(HUNDRED_PERCENT as u8)
                             .unwrap();
 
                         let creator_sol_amount: u64 = creator_share
-                        .checked_div(100)
+                        .checked_div(HUNDRED_PERCENT as u64)
                         .unwrap()
                         .checked_mul(creator_sol_fees as u64)
                         .unwrap()
@@ -460,7 +463,7 @@ pub mod marketplace_contract {
 
         // Fee for protocol
         let protocol_droplet_fee = PROTOCOL_DROPLET_FEE
-        .checked_div(100)
+        .checked_div(HUNDRED_PERCENT as u64)
         .unwrap();
         
         let protocol_droplet_amount = protocol_droplet_fee                    
@@ -477,7 +480,7 @@ pub mod marketplace_contract {
             &ctx.accounts.token_program.to_account_info()
         )?;
 
-        let protocol_sol_fee = (PROTOCOL_SOL_FEE / 100 as f64) as u64;
+        let protocol_sol_fee = (PROTOCOL_SOL_FEE / HUNDRED_PERCENT as f64) as u64;
         // .checked_div(100 as f64)
         // .unwrap() as u64;
 
@@ -495,7 +498,74 @@ pub mod marketplace_contract {
         )?;
 
 
-        // Transfer NFT to Buyer, pay Remaining SOL to seller and Close Seller Token Amount
+        // pay Remaining SOL & Droplets to seller and Close Seller Token Amount
+        
+        let seller_droplet_fee: u64 = HUNDRED_PERCENT
+                                 .checked_sub(creator_droplet_fees)
+                                 .unwrap()
+                                 .checked_sub(protocol_droplet_fee as u16)
+                                 .unwrap() as u64;
+
+        let seller_droplet_amount: u64 = seller_droplet_fee                    
+                    .checked_mul(LAMPORTS_PER_DROPLET)
+                    .unwrap()
+                    .checked_mul(DROPLETS_PER_NFT as u64)
+                    .unwrap() as u64;
+        pay_droplet_fee(
+            seller_droplet_amount, 
+            &ctx.accounts.buyer_droplet.to_account_info(), 
+            &ctx.accounts.seller_droplet.to_account_info(), 
+            &ctx.accounts.buyer.to_account_info(), 
+            &ctx.accounts.token_program
+        )?;
+        // Send SOL to Seller
+        if sol_amount != 0 {
+            let hundred_percent_point = 1.0 * HUNDRED_PERCENT as f64; 
+
+            let seller_sol_amount = (hundred_percent_point - PROTOCOL_SOL_FEE)
+                                         .mul(LAMPORTS_PER_SOL as f64) as u64;
+            pay_sol_fee(
+                seller_sol_amount, 
+                &ctx.accounts.buyer.to_account_info(), 
+                &ctx.accounts.seller.to_account_info(), 
+                &ctx.accounts.system_program.to_account_info(),
+            )?;
+            
+            msg!("NFT Sold for {} SOL", sol_amount);
+        }
+
+        // Transfer NFT to Buyer, 
+        let solvent_seed = ctx.accounts.solvent_program.key();            
+        let seeds = &[
+            PROGRAM_NFT_AUTHORITY_SEED.as_bytes(),
+            solvent_seed.as_ref(),
+            &[ctx.accounts.nft_info.program_nft_authority_bump]
+        ];
+        let signers = [&seeds[..]];
+        
+        let transfer_nft_ctx = CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            token::Transfer{
+                from: ctx.accounts.middle_man.to_account_info(),
+                to: ctx.accounts.buyer_nft.to_account_info(),
+                authority: ctx.accounts.program_nft_authority.to_account_info(),
+            },
+            &signers
+        );
+        token::transfer(transfer_nft_ctx, 1)?;
+        
+        // Close token account owned by program that stored nft
+        let close_ctx = CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            anchor_spl::token::CloseAccount{
+                account: ctx.accounts.middle_man.to_account_info(),
+                destination: ctx.accounts.seller.to_account_info(),
+                authority: ctx.accounts.program_nft_authority.to_account_info(),
+            },
+            &signers
+        );
+        token::close_account(close_ctx)?;
+
 
         Ok(())
     }
@@ -607,6 +677,13 @@ pub struct BuyNFT<'info>
     pub buyer: Signer<'info>,
 
     #[account(
+        mut,
+        constraint = buyer_nft.mint.key() == nft_info.nft_mint @ FasterError::InvalidNFTMint,
+        constraint = buyer_nft.owner == buyer.key() @ FasterError::WrongNFTOwner,
+    )]
+    pub buyer_nft: Account<'info, TokenAccount>,
+
+    #[account(
         mut, 
         constraint = buyer_droplet.owner == buyer.key(),
     )]
@@ -618,6 +695,13 @@ pub struct BuyNFT<'info>
         constraint = seller.key() == seller_droplet.owner
     )]
     pub seller: UncheckedAccount<'info>,
+
+    #[account(
+        mut, 
+        constraint = seller_nft.mint == nft_mint.key(),
+        constraint = seller_nft.owner == nft_info.owner,
+    )]
+    pub seller_nft: Account<'info, TokenAccount>,
 
     #[account(
         mut,
@@ -638,6 +722,8 @@ pub struct BuyNFT<'info>
     pub nft_mint: Account<'info, Mint>,
 
     #[account(
+        mut,
+        close = seller,
         seeds = [
             NFT_INFO_SEED.as_bytes(),
             nft_info.owner.as_ref(),
@@ -732,6 +818,29 @@ pub struct BuyNFT<'info>
     )]
     pub creator5: UncheckedAccount<'info>,
 
+    #[account(
+        mut,
+        seeds = [
+            MIDDLE_MAN_SEED.as_bytes(), 
+            nft_info.owner.key().as_ref(), 
+            nft_mint.key().as_ref()
+        ],
+        bump,
+        token::mint = nft_mint,
+        token::authority = program_nft_authority,
+        constraint = nft_info.middle_man == middle_man.key(),
+    )]
+    pub middle_man: Account<'info, TokenAccount>,
+    
+    #[account(
+        seeds = [
+            PROGRAM_NFT_AUTHORITY_SEED.as_bytes(),
+            solvent_program.key.as_ref(),
+        ],
+        bump = nft_info.program_nft_authority_bump,
+    )]
+    pub program_nft_authority: UncheckedAccount<'info>,
+
     // protocols
     #[account(executable)]
     pub solvent_program: UncheckedAccount<'info>, 
@@ -758,7 +867,11 @@ pub struct ListNFT<'info>
     #[account(mut)]
     pub signer: Signer<'info>,
 
-    #[account(mut, constraint = nft.mint == nft_mint.key())]
+    #[account(
+        mut, 
+        constraint = nft.mint == nft_mint.key(),
+        constraint = nft.owner == signer.key(),
+    )]
     pub nft: Account<'info, TokenAccount>,
 
     #[account(mut)]
@@ -852,6 +965,8 @@ pub enum FasterError
 
     #[msg("Creator(s) are not verified, either incomplete or invalid")]
     CreatorsNotVerified,
+
+
 }
 // TODO 
 // SOLVENT PROGRAM should be static str
