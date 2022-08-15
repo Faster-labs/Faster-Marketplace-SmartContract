@@ -1,7 +1,25 @@
 [features]
-seeds = false
+seeds = true
 [programs.localnet]
 marketplace_contract = "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
+
+
+[[test.genesis]]
+address = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+program = "./tests/genesis-programs/mpl_token_metadata.so"
+
+[[test.genesis]]
+address = "nft3agWJsaL1nN7pERYDFJUf54BzDZwS3oRbEzjrq6q"
+program = "./tests/genesis-programs/solvent.so"
+
+[[test.genesis]]
+address = "bankHHdqMuaaST4qQk6mkzxGeKPHWmqdgor6Gs8r88m"
+program = "./tests/genesis-programs/gem_bank.so"
+
+[[test.genesis]]
+address = "farmL4xeBFVXJqtfxCzU9b28QACM7E2W2ctT6epAjvE"
+program = "./tests/genesis-programs/gem_farm.so"
+
 
 [registry]
 url = "https://anchor.projectserum.com"

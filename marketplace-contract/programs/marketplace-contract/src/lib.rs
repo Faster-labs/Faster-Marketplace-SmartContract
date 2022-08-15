@@ -292,7 +292,8 @@ pub mod marketplace_contract {
                 return Err(FasterError::CollectionMismatch.into());
             }
         }
-
+// This is for testing MVP
+/*
         // Fee for Creators
         // creator_fees is a percentage but seller_basis_points is (0 - 10000)
         let creator_droplet_fees = metadata.data.seller_fee_basis_points
@@ -461,7 +462,7 @@ pub mod marketplace_contract {
             &ctx.accounts.faster_protocol.to_account_info(), 
             &ctx.accounts.system_program.to_account_info(),
         )?;
-
+*/
         // pay Remaining SOL & Droplets to seller and Close Seller Token Amount
         let seller_droplet_fee: u64 = HUNDRED_PERCENT
                                  .checked_sub(creator_droplet_fees)
