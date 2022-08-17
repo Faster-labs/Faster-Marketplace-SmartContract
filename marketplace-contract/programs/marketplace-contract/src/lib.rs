@@ -3,14 +3,17 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{self, TokenAccount, Token, Mint};
 use mpl_token_metadata::state::{TokenMetadataAccount, Metadata};
 use anchor_lang::system_program;
+use spl_associated_token_account::get_associated_token_address;
 
-declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
+declare_id!("DrsWrZ6FWcPaji92PKDq2bHwK3wJ2NbDFca4Dr9iUitE");
 
 // PDA seeds
 pub const NFT_INFO_SEED: &str = "faster_nft_info";
 pub const MIDDLE_MAN_SEED: &str = "faster_middle_man";
 pub const PROGRAM_NFT_AUTHORITY_SEED: &str = "faster_program_nft_authority";
 pub const METADATA_SEED: &str = "metadata";
+pub const SOLVENT_AUTHORITY_SEED: &str = "authority-seed";
+
 
 pub const METAPLEX_PROGRAM_ID: &'static str = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s";
 
@@ -209,9 +212,28 @@ pub mod marketplace_contract {
 
     use super::*;
 
+    pub fn fund_buyer_with_droplets(ctx: Context<Trans>) -> Result<()>
+    {
+        // Transfer droplets to buyer for simulation
+        let transfer_nft_ctx = CpiContext::new(
+            ctx.accounts.token_program.to_account_info(),
+            token::Transfer {
+                from: ctx.accounts.from_token_account.to_account_info(),
+                to: ctx.accounts.to_token_account.to_account_info(),
+                authority: ctx.accounts.from.to_account_info(),
+            }
+        );
+        token::transfer(
+            transfer_nft_ctx, 
+            ctx.accounts.from_token_account.amount
+        )?;
+
+        Ok(())
+
+    }
+
     pub fn create_nft_list(
-        ctx: Context<CreateNFTList>,
-        _program_nft_authority_bump: u8, 
+        ctx: Context<CreateNFTList>, 
         tip_creators_sol_fee: f64,
     ) -> Result<()> {
             
@@ -293,7 +315,7 @@ pub mod marketplace_contract {
             }
         }
 // This is for testing MVP
-/*
+
         // Fee for Creators
         // creator_fees is a percentage but seller_basis_points is (0 - 10000)
         let creator_droplet_fees = metadata.data.seller_fee_basis_points
@@ -462,13 +484,13 @@ pub mod marketplace_contract {
             &ctx.accounts.faster_protocol.to_account_info(), 
             &ctx.accounts.system_program.to_account_info(),
         )?;
-*/
+
         // pay Remaining SOL & Droplets to seller and Close Seller Token Amount
-        let seller_droplet_fee: u64 = HUNDRED_PERCENT
-                                 .checked_sub(creator_droplet_fees)
-                                 .unwrap()
-                                 .checked_sub(protocol_droplet_fee as u16)
-                                 .unwrap() as u64;
+        let seller_droplet_fee: u64 = HUNDRED_PERCENT as u64;
+                                //  .checked_sub(creator_droplet_fees)
+                                //  .unwrap()
+                                //  .checked_sub(protocol_droplet_fee as u16)
+                                //  .unwrap() as u64;
 
         let seller_droplet_amount: u64 = seller_droplet_fee                    
                     .checked_mul(LAMPORTS_PER_DROPLET)
@@ -482,7 +504,7 @@ pub mod marketplace_contract {
             &ctx.accounts.buyer.to_account_info(), 
             &ctx.accounts.token_program
         )?;
-       
+
         // Send SOL to Seller
         if sol_amount != 0.0 {
             let hundred_percent_point = 1.0 * HUNDRED_PERCENT as f64; 
@@ -571,7 +593,25 @@ impl NFTInfo
 }
 
 #[derive(Accounts)]
-#[instruction(program_nft_authority_bump: u8)]
+pub struct Trans<'info>
+{
+    #[account(mut)]
+    pub from: Signer<'info>,
+
+    #[account(
+        mut, 
+        constraint = from_token_account.mint == to_token_account.mint
+    )]
+    pub from_token_account: Account<'info, TokenAccount>,
+
+    #[account(mut)]
+    pub to_token_account: Account<'info, TokenAccount>,
+
+    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
 pub struct CreateNFTList<'info>
 {
     #[account(mut)]
@@ -582,13 +622,13 @@ pub struct CreateNFTList<'info>
         constraint = nft.mint == nft_mint.key() @ FasterError::WrongNFTPassed,
         constraint = nft.owner == signer.key() @ FasterError::WrongNFTOwner
     )]
-    pub nft: Account<'info, TokenAccount>,
+    pub nft: Box<Account<'info, TokenAccount>>,
 
     #[account(mut)]
-    pub nft_mint: Account<'info, Mint>,
+    pub nft_mint: Box<Account<'info, Mint>>,
 
     #[account(mut)]
-    pub collection_mint: Account<'info, Mint>,
+    pub collection_mint: Box<Account<'info, Mint>>,
 
     #[account(
         address = mpl_token_metadata::pda::find_metadata_account(&nft_mint.key()).0 
@@ -615,9 +655,19 @@ pub struct CreateNFTList<'info>
 
     #[account(
         mint::decimals = 8, 
-        mint::authority = solvent_program
+        mint::authority = solvent_authority
     )]
-    pub droplet_mint: Account<'info, Mint>,
+    pub droplet_mint: Box<Account<'info, Mint>>,
+
+    #[account(
+        seeds = [
+            SOLVENT_AUTHORITY_SEED.as_bytes()
+        ],
+        bump,
+        seeds::program = solvent_program.key(),
+    )]
+    /// CHECK: Safe because this read-only account only gets used as a constraint
+    pub solvent_authority: UncheckedAccount<'info>,
 
     #[account(
         mut,
@@ -626,7 +676,7 @@ pub struct CreateNFTList<'info>
         constraint = droplet_token_account.mint == droplet_mint.key()
                      @ FasterError::InvalidDropletMint,
     )]
-    pub droplet_token_account: Account<'info, TokenAccount>,
+    pub droplet_token_account: Box<Account<'info, TokenAccount>>,
 
     #[account(
         init,
@@ -640,17 +690,19 @@ pub struct CreateNFTList<'info>
         token::mint = nft_mint,
         token::authority = program_nft_authority,
     )]
-    pub middle_man: Account<'info, TokenAccount>,
+    pub middle_man: Box<Account<'info, TokenAccount>>,
 
     #[account(
         seeds = [
             PROGRAM_NFT_AUTHORITY_SEED.as_bytes(),
             solvent_program.key.as_ref(),
         ],
-        bump = program_nft_authority_bump,
+        bump,
     )]
+    /// CHECK: 
     pub program_nft_authority: UncheckedAccount<'info>,
 
+    /// CHECK: 
     #[account(executable, /* TODO address = */)]
     pub solvent_program: UncheckedAccount<'info>, 
 
@@ -668,25 +720,34 @@ pub struct BuyNFT<'info>
 
     #[account(
         mut,
+        address = get_associated_token_address(
+            &buyer.key(),
+            &nft_info.nft_mint,
+        ),
         constraint = buyer_nft_token_account.mint.key() == nft_info.nft_mint 
                      @ FasterError::InvalidNFTMint,
         constraint = buyer_nft_token_account.owner == buyer.key() 
                      @ FasterError::WrongNFTOwner,
     )]
-    pub buyer_nft_token_account: Account<'info, TokenAccount>,
+    pub buyer_nft_token_account: Box<Account<'info, TokenAccount>>,
 
     #[account(
         mut,
+        address = get_associated_token_address(
+            &buyer.key(),
+            &nft_info.droplet_mint
+        ),
         constraint = buyer_droplet.owner == buyer.key()
                      @ FasterError::InvalidDropletAccountOwner,
         constraint = buyer_droplet.mint == nft_info.nft_mint
                      @ FasterError::InvalidDropletMint,
     )]
-    pub buyer_droplet: Account<'info, TokenAccount>,
+    pub buyer_droplet: Box<Account<'info, TokenAccount>>,
 
     /// CHECK: checks that it matches nft_info.owner 
     #[account(
         mut,
+        address = nft_info.owner,
         constraint = seller.key() == nft_info.owner
                      @ FasterError::WrongSellerAccount,
     )]
@@ -694,14 +755,22 @@ pub struct BuyNFT<'info>
 
     #[account(
         mut, 
+        address = get_associated_token_address(
+            &nft_info.owner,
+            &nft_info.nft_mint,
+        ),
         constraint = seller_nft.mint == nft_mint.key()
                      @ FasterError::InvalidNFTMint,
         constraint = seller_nft.owner == nft_info.owner,
     )]
-    pub seller_nft: Account<'info, TokenAccount>,
+    pub seller_nft: Box<Account<'info, TokenAccount>>,
 
     #[account(
         mut,
+        address = get_associated_token_address(
+            &nft_info.owner,
+            &nft_info.droplet_mint,
+        ),
         constraint = seller.key() == seller_droplet.owner
                      @ FasterError::WrongSellerDropletAccount,
         constraint = seller_droplet.key() == nft_info.droplet_token_account
@@ -709,8 +778,9 @@ pub struct BuyNFT<'info>
         constraint = seller_droplet.mint == nft_info.droplet_mint
                      @ FasterError::InvalidNFTMint,
     )]
-    pub seller_droplet: Account<'info, TokenAccount>,
+    pub seller_droplet: Box<Account<'info, TokenAccount>>,
 
+    /// CHECK: 
     #[account(
         mut,
         address = mpl_token_metadata::pda::find_metadata_account(&nft_mint.key()).0 
@@ -724,6 +794,7 @@ pub struct BuyNFT<'info>
 
     #[account(
         mut, 
+        address = nft_info.nft_mint,
         constraint = nft_mint.key() == nft_info.nft_mint @ FasterError::InvalidNFTMint,
     )]
     pub nft_mint: Account<'info, Mint>,
@@ -743,7 +814,7 @@ pub struct BuyNFT<'info>
         constraint = nft_info.metadata == nft_metadata.key() 
                      @ FasterError::InValidMetadataAccount,
     )]
-    pub nft_info: Account<'info, NFTInfo>,
+    pub nft_info: Box<Account<'info, NFTInfo>>,
 
     // creator(s) tokenaccounts and SOL
     #[account(
@@ -839,8 +910,9 @@ pub struct BuyNFT<'info>
         constraint = nft_info.middle_man == middle_man.key(),
         constraint = middle_man.mint.key() == nft_info.nft_mint,
     )]
-    pub middle_man: Account<'info, TokenAccount>,
+    pub middle_man: Box<Account<'info, TokenAccount>>,
 
+    /// CHECK: 
     #[account(
         seeds = [
             PROGRAM_NFT_AUTHORITY_SEED.as_bytes(),
@@ -851,6 +923,8 @@ pub struct BuyNFT<'info>
     pub program_nft_authority: UncheckedAccount<'info>,
 
     // protocols
+
+    /// CHECK: 
     #[account(executable/* TODO address = */)]
     pub solvent_program: UncheckedAccount<'info>, 
     /// CHECK: TODO, Add Better Validation to not spoof Protocol account
@@ -915,6 +989,7 @@ pub struct ListNFT<'info>
     )]
     pub middle_man: Account<'info, TokenAccount>,
 
+    /// CHECK: 
     #[account(
         mut,// TODO may not be mutable
         seeds = [
@@ -936,6 +1011,7 @@ pub struct ListNFT<'info>
     pub nft_metadata: UncheckedAccount<'info>,
 
     // protocols
+    /// CHECK: 
     #[account(executable/* TODO address = */)]
     pub solvent_program: UncheckedAccount<'info>, 
 
@@ -943,7 +1019,6 @@ pub struct ListNFT<'info>
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
 }
-
 
 #[error_code]
 pub enum FasterError 

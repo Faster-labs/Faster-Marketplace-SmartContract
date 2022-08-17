@@ -27,7 +27,7 @@ export const createKeypair = async (provider: anchor.Provider) => {
 
   export const mintNft = async (
     provider: anchor.Provider,
-    symbol: string,
+  //  symbol: string,
     creator: anchor.web3.Keypair,
     destination: anchor.web3.PublicKey,
     collectionMint?: anchor.web3.PublicKey,
@@ -77,7 +77,7 @@ export const createKeypair = async (provider: anchor.Provider) => {
                 isMutable: false,
                 data: {
                   name: "Pretty Cool NFT",
-                  symbol: nftSymbol,
+                  symbol: "PCN",
                   sellerFeeBasisPoints: 10,
                   uri: "https://pretty-cool-nft.xyz/metadata",
                   creators: [
@@ -149,7 +149,7 @@ export const createKeypair = async (provider: anchor.Provider) => {
   };
   
 
-  const getTokenMetadata = async (tokenMint: anchor.web3.PublicKey) => {
+ export const getTokenMetadata = async (tokenMint: anchor.web3.PublicKey) => {
     const [tokenMetadataAddress, bump] =
       await anchor.web3.PublicKey.findProgramAddress(
         [
