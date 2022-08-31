@@ -1,0 +1,2 @@
+Error: /home/chinedum/.cargo/registry/src/github.com-1ecc6299db9ec823/sha2-0.10.2/src/sha256/soft.rs:165 Function _ZN4sha26sha2564soft23sha256_digest_block_u3217hb322c4dbc63927beE Stack offset of 11872 exceeded max offset of 4096 by 7776 bytes, please minimize large stack variables
+Error: /home/chinedum/.cargo/registry/src/github.com-1ecc6299db9ec823/sha2-0.10.2/src/sha512/soft.rs:98 Function _ZN4sha26sha5124soft23sha512_digest_block_u6417hfb8731beef012beeE Stack offset of 19112 exceeded max offset of 4096 by 15016 bytes, please minimize large stack variables

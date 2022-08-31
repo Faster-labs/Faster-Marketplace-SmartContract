@@ -1,0 +1,1 @@
+/home/chinedum/Blockchain\ Learning/hackathon/fasterlabs/marketplace-contract/marketplace-contract/.coderrect/build/bpfel-unknown-unknown/release/libmarketplace_contract.rlib: /home/chinedum/Blockchain\ Learning/hackathon/fasterlabs/marketplace-contract/marketplace-contract/programs/marketplace-contract/src/lib.rs

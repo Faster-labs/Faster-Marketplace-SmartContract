@@ -1,0 +1,10 @@
+/home/chinedum/Blockchain Learning/hackathon/fasterlabs/marketplace-contract/marketplace-contract/.coderrect/build/release/deps/version_check-912d261c4f1efdc4.rmeta: /home/chinedum/.cargo/registry/src/github.com-1ecc6299db9ec823/version_check-0.9.4/src/lib.rs /home/chinedum/.cargo/registry/src/github.com-1ecc6299db9ec823/version_check-0.9.4/src/version.rs /home/chinedum/.cargo/registry/src/github.com-1ecc6299db9ec823/version_check-0.9.4/src/channel.rs /home/chinedum/.cargo/registry/src/github.com-1ecc6299db9ec823/version_check-0.9.4/src/date.rs
+
+/home/chinedum/Blockchain Learning/hackathon/fasterlabs/marketplace-contract/marketplace-contract/.coderrect/build/release/deps/libversion_check-912d261c4f1efdc4.rlib: /home/chinedum/.cargo/registry/src/github.com-1ecc6299db9ec823/version_check-0.9.4/src/lib.rs /home/chinedum/.cargo/registry/src/github.com-1ecc6299db9ec823/version_check-0.9.4/src/version.rs /home/chinedum/.cargo/registry/src/github.com-1ecc6299db9ec823/version_check-0.9.4/src/channel.rs /home/chinedum/.cargo/registry/src/github.com-1ecc6299db9ec823/version_check-0.9.4/src/date.rs
+
+/home/chinedum/Blockchain Learning/hackathon/fasterlabs/marketplace-contract/marketplace-contract/.coderrect/build/release/deps/version_check-912d261c4f1efdc4.d: /home/chinedum/.cargo/registry/src/github.com-1ecc6299db9ec823/version_check-0.9.4/src/lib.rs /home/chinedum/.cargo/registry/src/github.com-1ecc6299db9ec823/version_check-0.9.4/src/version.rs /home/chinedum/.cargo/registry/src/github.com-1ecc6299db9ec823/version_check-0.9.4/src/channel.rs /home/chinedum/.cargo/registry/src/github.com-1ecc6299db9ec823/version_check-0.9.4/src/date.rs
+
+/home/chinedum/.cargo/registry/src/github.com-1ecc6299db9ec823/version_check-0.9.4/src/lib.rs:
+/home/chinedum/.cargo/registry/src/github.com-1ecc6299db9ec823/version_check-0.9.4/src/version.rs:
+/home/chinedum/.cargo/registry/src/github.com-1ecc6299db9ec823/version_check-0.9.4/src/channel.rs:
+/home/chinedum/.cargo/registry/src/github.com-1ecc6299db9ec823/version_check-0.9.4/src/date.rs:
